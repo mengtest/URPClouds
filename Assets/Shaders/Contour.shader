@@ -29,53 +29,45 @@
             struct v2f
             {
                 float2 uv : TEXCOORD0;
+                float3 worldPos : TEXCOORD1;
+                float3 view : TEXCOORD2;
+                float3 tangentDir : TEXCOORD3;
+                float3 bitangentDir : TEXCOORD4;
+                float3 normal : NORMAL;
                 float4 vertex : SV_POSITION;
-                float3 tpos : TEXCOORD1;
-                float3 wpos : TEXCOORD2;
             };
 
             sampler2D _NormalTex;
             sampler2D _MainTex;
-            // float4 _NormalTex_ST;
 
             v2f vert (appdata v)
             {
                 v2f o;
                 o.uv = v.uv;
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                fixed3 worldPos = mul(unity_ObjectToWorld, v.vertex);
-                // fixed3 viewDir = _WorldSpaceCameraPos - worldPos;
-                // float3 binormal = cross( normalize(v.normal), normalize(v.tangent.xyz) ) * v.tangent.w;
-                // float3x3 rotation = float3x3( v.tangent.xyz, binormal, v.normal )
-                // TANGENT_SPACE_ROTATION;
-                // o.tpos = mul(rotation, viewDir);
-                fixed3 normalWS = UnityObjectToWorldNormal(v.normal);
-                o.tpos = normalWS;
-                o.wpos = worldPos;
-                // o.pos = v.vertex;
-                // o.uv = TRANSFORM_TEX(v.uv, _NormalTex);
-                // UNITY_TRANSFER_FOG(o,o.vertex);
+                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                o.view = normalize(WorldSpaceViewDir(v.vertex));
+                o.normal = normalize( mul( unity_ObjectToWorld ,  v.normal).xyz ) ;
+                o.tangentDir = normalize( mul( unity_ObjectToWorld , float4( v.tangent.xyz, 0) ).xyz );
+                o.bitangentDir = cross( o.normal , o.tangentDir) * v.tangent.w;
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // sample the texture
-                // fixed3 normal = UnpackNormal(tex2D(_NormalTex, i.uv));
-                // float d = dot(normal, i.tpos);
-                float d = clamp(dot(normalize(i.tpos), normalize(_WorldSpaceCameraPos - i.wpos)), 0, 1);
-                fixed3 c = tex2D(_MainTex, i.uv);
-                // return fixed4(c * d, 1.0f);
+                float3x3 rotation = float3x3(i.tangentDir, i.bitangentDir, i.normal);
+                float3 viewDirTS = normalize(mul(rotation, i.view));
+                float3 normal = normalize(UnpackNormal(tex2D(_NormalTex, i.uv)));
+                float d = clamp(dot(normal, viewDirTS), 0, 1);
+                float3 c = tex2D(_MainTex, i.uv);
                 if (d < 0.5f) 
                 {
                     float md = abs(d - 0.25f) * 4;
-                    // return fixed4(c * md, 1.0f);
-                    return fixed4(0, 0, 0, 1.0f);
+                    return float4(0, 0, 0, 1.0f);
                 }
                 else
                 {
-                    // return fixed4(normalize(i.wpos), 1.0f);
-                    return fixed4(c, 1.0f);
+                    return float4(c, 1.0f);
                 }
             }
             ENDCG
