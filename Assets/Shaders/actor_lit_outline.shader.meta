@@ -1,0 +1,12 @@
+fileFormatVersion: 2
+guid: 30732e51d5bc3f14292f1baf8c805934
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _BaseMap: {fileID: 2800000, guid: 698ad716fcba2ac4697693745a78c1d4, type: 3}
+  - _NormalMap: {fileID: 2800000, guid: e32693a7d2337f24f878e52529e4bdbd, type: 3}
+  - _EmissionMap: {fileID: 2800000, guid: 473657598e3299244af57176832bfe9b, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: h3d.shader
+  assetBundleVariant: 
