@@ -29,10 +29,9 @@
             struct v2f
             {
                 float2 uv : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
-                float3 view : TEXCOORD2;
-                float3 tangentDir : TEXCOORD3;
-                float3 bitangentDir : TEXCOORD4;
+                float3 view : TEXCOORD1;
+                float3 tangentDir : TEXCOORD2;
+                float3 bitangentDir : TEXCOORD3;
                 float3 normal : NORMAL;
                 float4 vertex : SV_POSITION;
             };
@@ -45,7 +44,6 @@
                 v2f o;
                 o.uv = v.uv;
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
                 o.view = normalize(WorldSpaceViewDir(v.vertex));
                 o.normal = normalize( mul( unity_ObjectToWorld ,  v.normal).xyz ) ;
                 o.tangentDir = normalize( mul( unity_ObjectToWorld , float4( v.tangent.xyz, 0) ).xyz );
