@@ -59,6 +59,11 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
             RenderTextureDescriptor opaqueDesc = renderingData.cameraData.cameraTargetDescriptor;
             opaqueDesc.depthBufferBits = 0;
 
+            var camera = renderingData.cameraData.camera;
+            var mainLight = renderingData.lightData.visibleLights[renderingData.lightData.mainLightIndex];
+            blitMaterial.SetColor("_SunLightColor", mainLight.finalColor);
+            blitMaterial.SetMatrix("_ClipToWorldMatrix", (camera.projectionMatrix * camera.worldToCameraMatrix).inverse);
+            // blitMaterial.SetMatrix("_ClipToWorldMatrix", camera.projectionMatrix.inverse);
             // Can't read and write to same color target, create a temp render target to blit. 
             if (destination == RenderTargetHandle.CameraTarget)
             {
