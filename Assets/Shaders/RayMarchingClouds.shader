@@ -4,9 +4,8 @@
     {
         [HideInInspector] _MainTex("Base (RGB)", 2D) = "white" {}
         _BlueNoise("BlueNoise", 2D) = "white" {}
-        _MaskNoise("MaskNoise", 2D) = "white" {}
-        _CloudNoise("CloudNoise", 3D) = "white" {}
-        _StepSize("StepSize", Float) = 3
+        _ShapeNoise("ShapeNoise", 3D) = "white" {}
+        _DetailNoise("DetailNoise", 3D) = "white" {}
         _WeatherMap("WeatherMap", 2D) = "white" {}
         _BoundsMax("BoundsMax", Vector) = (10, 3, 10, 0)
         _BoundsMin("BoundsMin", Vector) = (-10, 0, -10, 0)
@@ -28,8 +27,9 @@
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
             sampler2D _WeatherMap;
-            sampler2D _MaskNoise;
-            sampler3D _CloudNoise;
+            sampler2D _BlueNoise;
+            sampler3D _ShapeNoise;
+            sampler3D _DetailNoise;
             float4x4 _ClipToWorldMatrix;
             float3 _BoundsMin;
             float3 _BoundsMax;
@@ -59,15 +59,75 @@
                 return output;
             }
 
-            float HG(float a, float g)
-            {
-
+            // Henyey-Greenstein
+            float hg(float a, float g) {
+                float g2 = g*g;
+                return (1-g2) / (4*3.1415*pow(1+g2-2*g*(a), 1.5));
             }
 
-            float sampleDensity(float3 uvw)
-            {
-                return tex3D(_CloudNoise, uvw).x * tex2D(_WeatherMap, uvw.xz).x;
+
+            // 相函数信息
+            const static float4 phaseParams = float4(0.3, 0.3, 0.3, 1);
+            float phase(float a) {
+                float blend = .5;
+                float hgBlend = hg(a,phaseParams.x) * (1-blend) + hg(a,-phaseParams.y) * blend;
+                return phaseParams.z + hgBlend*phaseParams.w;
             }
+
+            float remap(float v, float minOld, float maxOld, float minNew, float maxNew) {
+                return minNew + (v-minOld) * (maxNew - minNew) / (maxOld-minOld);
+            }
+
+            float sampleDensity(float3 pos)
+            {
+                float3 size = _BoundsMax - _BoundsMin;
+                float2 weatheruv = (pos - _BoundsMin).xz / max(size.x, size.z) * 4;
+                float weather = tex2D(_WeatherMap, weatheruv).x; 
+
+                const float containerEdgeFadeDst = 50;
+                float dstFromEdgeX = min(containerEdgeFadeDst, min(pos.x - _BoundsMin.x, _BoundsMax.x - pos.x));
+                float dstFromEdgeZ = min(containerEdgeFadeDst, min(pos.z - _BoundsMin.z, _BoundsMax.z - pos.z));
+                float edgeWeight = min(dstFromEdgeZ,dstFromEdgeX) / containerEdgeFadeDst;
+
+                // float gMin = remap(weather, 0, 1, 0.1, 0.5);
+                // float gMax = remap(weather, 0, 1, gMin, 0.9);
+                // float heightPercent = (pos.y - _BoundsMin.y) / size.y;
+                // float heightGradient = saturate(remap(heightPercent, 0.0, gMin, 0, 1)) * saturate(remap(heightPercent, 1, gMax, 0, 1));
+                // heightGradient *= edgeWeight;
+
+                //  float gMin = remap(weatherMap.x,0,1,0.1,0.5);
+                // float gMax = remap(weatherMap.x,0,1,gMin,0.9);
+                // float heightPercent = (rayPos.y - boundsMin.y) / size.y;
+                // float heightGradient = saturate(remap(heightPercent, 0.0, gMin, 0, 1)) * saturate(remap(heightPercent, 1, gMax, 0, 1));
+                // heightGradient *= edgeWeight;
+
+
+                float gMin = remap(weather, 0, 1, 0.1, 0.5);
+                float heightPercent = (pos.y - _BoundsMin.y) / size.y;
+                float heightGradient = saturate(remap(heightPercent, 0.0, weather, 1, 0)) * saturate(remap(heightPercent, 0.0, gMin, 0, 1));
+                heightGradient *= edgeWeight;
+
+                float3 uvw = (pos - _BoundsMin) * 0.001;
+                float3 shapeNoise = tex3D(_ShapeNoise, uvw);
+                const static float3 shapeWeights = float3(0.2, 0.2, 0.2);
+                float shapeFBM = dot(shapeNoise, shapeWeights);
+                float value = shapeFBM * heightGradient;
+
+                if (value > 0)
+                {
+                    float3 detailNoise = tex3D(_DetailNoise, uvw * 0.5f);   
+                    const static float3 detailWeights = float3(0.2, 0.3, 0.3);
+                    float detailFBM = dot(detailNoise, detailWeights);
+
+                    float oneMinuseShapeFBM = 1 - shapeFBM;
+                    float detailErodeWeight = oneMinuseShapeFBM * oneMinuseShapeFBM * oneMinuseShapeFBM;
+
+                    value -= (1 - detailFBM) * detailErodeWeight * 0.1f;
+                }
+
+                return value;
+            }
+
             
             float2 rayBoxDst(float3 rayOrigin, float3 invRayDir)
             {
@@ -80,9 +140,22 @@
                 float dstA = max(max(tmin.x, tmin.y), tmin.z); //进入点
                 float dstB = min(tmax.x, min(tmax.y, tmax.z)); //出去点
 
+                // if (dstB > 0 && dstA < dstB) return(dstA, dstB);
+
+                // if (dstA > dstB) return float2(0, 0);
                 float dstToBox = max(0, dstA);
                 float dstInsideBox = max(0, dstB - dstToBox);
                 return float2(dstToBox, dstInsideBox);
+            }
+
+            float2 squareUV(float2 uv) {
+                float width = _ScreenParams.x;
+                float height =_ScreenParams.y;
+                //float minDim = min(width, height);
+                float scale = 1000;
+                float x = uv.x * width;
+                float y = uv.y * height;
+                return float2 (x/scale, y/scale);
             }
 
             half4 frag(Varyings input) : SV_Target
@@ -106,55 +179,58 @@
 
                 rayInfo.y = min(linearDepth - rayInfo.x, rayInfo.y);
 
-                const float stepSize = 0.1f;
-                const float maxSteps = 50;
-                float sum = 0;
+
+                // RayMarching步长
+                const static float stepSize = 0.5f;
                 float3 VolumeSize = _BoundsMax - _BoundsMin;
                 float3 InvSize = rcp(VolumeSize);
-                float tmax = rayInfo.x + min(rayInfo.y, stepSize * maxSteps);
+                float tmax = rayInfo.x + rayInfo.y;
 
                 
                 float3 lightDirection = normalize(_MainLightPosition.xyz);
+                float cosTheta = dot(lightDirection, direction);
+                float phaseVal = phase(cosTheta);
                 float Tr = 1.0f;
-                float3 AccumLight = float3(0, 0, 0);
+                float LightEnergy = 0;
+                float sum = 0;
+
+                float randomOffset = tex2D(_BlueNoise, squareUV(input.uv * 3)).r;
                 [loop]
-                for(float t = rayInfo.x; t < tmax; t += stepSize)
+                for(float t = rayInfo.x + randomOffset * 0.5; t < tmax; t += stepSize)
                 {
                     float3 pos = cameraPos  + t * direction;
                     float3 uvw = (pos - _BoundsMin) * InvSize;
 
-                    float d = sampleDensity(uvw);
+                    float d = sampleDensity(pos);
+                    sum += d * 0.001f;
 
                     float2 lightMarchingInfo = rayBoxDst(pos, rcp(lightDirection));
-                    float lightMarchingStepSize = lightMarchingInfo.y * 0.25f;
+                    const static int lightMatchingSteps = 4;
+                    float lightMarchingStepSize = lightMarchingInfo.y / lightMatchingSteps;
                     float lightMarchingDensityAccum = 0;
-                    [loop]
-                    for(int i = 0.5f; i < 4; i = i + 1.0f)
+                    if (d > 0)
                     {
-                        lightMarchingDensityAccum += sampleDensity((pos + lightDirection * (lightMarchingStepSize * i + lightMarchingInfo.x) - _BoundsMin) * InvSize);
+                        [loop]
+                        for(int i = 0; i < lightMatchingSteps; i++)
+                        {
+                            float3 npos = pos + lightDirection * (lightMarchingInfo.x + lightMarchingStepSize * i);
+                            lightMarchingDensityAccum += max(sampleDensity(npos) * lightMarchingStepSize, 0);
+                        }
+                        const static float LightAbsortionTowardsSun = 1.0f;
+                        float sunLightTr = exp(-lightMarchingDensityAccum * lightMarchingStepSize * LightAbsortionTowardsSun);
+                        const static float darknessThreshold = 0.25f;
+                        sunLightTr = darknessThreshold + (1 - darknessThreshold) * sunLightTr;
+                        LightEnergy += Tr * d * stepSize * sunLightTr * phaseVal;
                     }
-                    // AccumLight = Tr * _MainLightColor * d * stepSize * exp(-lightMarchingStepSize * lightMarchingDensityAccum);
-                    AccumLight = Tr * _MainLightColor.xyz * d * stepSize * 10;
-                    Tr *= exp(-d * stepSize);
+
+                    const static float LightAbsortionThroughCloud = 0.6f;
+                    Tr *= exp(-d * stepSize * LightAbsortionThroughCloud);
                     if (Tr < 0.01) break;
-
-                    
-
                 }
 
-                
-                // float3 VolumeSize = _BoundsMax - _BoundsMin;
-                // float InvMax = 1 / max(VolumeSize.x, VolumeSize.z);
-                // float3 uvw = (WSP - _BoundsMin) / VolumeSize;
-                // float2 uv = (WSP.xz - _BoundsMin.xz) * InvMax;
-                // float c = tex2D(_WeatherMap, uv).x;
-                // return float4(lightDirection, 1.0f);
-                // return float4(_MainLightColor.xyz, 1.0f);
-                // return float4(col.xyz, 1);
-                return float4(Tr * col.xyz , 1);
-                // return float4(col.xyz * intensity, 1.0f);
-                // return float4(intensity , intensity, intensity, 1.0f);
-                // return float4(col.xyz * (intensity ), 1.0f);
+                return float4(sum, sum, sum , 1);
+                return float4(Tr * col.xyz + LightEnergy * _MainLightColor, 1);
+                // return float4(Tr * col.xyz, 1);
             }
             
             
