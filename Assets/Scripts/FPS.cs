@@ -30,7 +30,7 @@ public class FPS : MonoBehaviour
     void Start()
     {
         m_lastUpdateShowTime = Time.realtimeSinceStartup;
-        m_fps = new Rect(0, 0, 100, 100);
+        m_fps = new Rect(0, 200, 100, 100);
         m_dtime = new Rect(0, 100, 100, 100);
         m_style.fontSize = 40;
         m_style.normal.textColor = Color.red;

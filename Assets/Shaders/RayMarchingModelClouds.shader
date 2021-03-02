@@ -90,18 +90,19 @@
 
                 // float value = shapeFBM;
                 sdf = tex3D(_ShapeNoise, uvw).a;
-                if (sdf < 0) density = 1;
+                if (sdf < -0.002f) density = 1;
                 else density  = smoothStep(saturate(remap(sdf, 0, 0.003f, 1.0, 0.0)));
 
                 if (density > 0)
                 {
-                    const static float3 speed = float3(0.1f, 0.1f, 0.1f);
+                    const static float3 speed = float3(0.01f, 0.02f, 0.05f);
                     float3 detailNoise = tex3D(_DetailNoise, uvw * 0.5f + speed * _Time.y).xyz;   
-                    // const static float3 detailWeights = float3(0.5, 0.3, 0.3);
-                    // float detailFBM = dot(detailNoise, detailWeights);
-                    // detailFBM = remap(detailFBM, 0, 1, 0.2, 1);
+                    const static float3 detailWeights = float3(0.5, 0.3, 0.3);
+                    float detailFBM = dot(detailNoise, detailWeights);
+                    detailFBM = remap(detailFBM, 0, 1, 0.5, 1);
                     // density *= detailFBM;
-                    density *= detailNoise.z;
+                    // density *= detailFBM;
+                    density *= remap(detailNoise.z, 0, 1, 0.4, 1);
                 }
                 return sdf < 0;
             }
@@ -184,49 +185,52 @@
 
                     float d;
                     float sdf;
-                    sampleDensity(pos, sdf, d);
-                    // if (sampleDensity(pos, sdf, d))
-                    // {
-                    //     t += max(sdf * _BoundsSize, stepSize); 
-                    // }
-                    // else
-                    // {
-                    //     t += stepSize;
-                    // }
-                    t += stepSize;
+                    // sampleDensity(pos, sdf, d);
+                    // t += stepSize;
+                    // SDF变步长
+                    if (!sampleDensity(pos, sdf, d))
+                    {
+                        t += max(sdf * _BoundsSize * 7.5f, stepSize); 
+                    }
+                    else
+                    {
+                        t += stepSize;
+                    }
                     // t += stepSize;
                     sum += d * 0.02f;
 
-                    float2 lightMarchingInfo = rayBoxDst(pos, rcp(lightDirection));
-                    const static int lightMatchingSteps = 5;
-                    float lightMarchingStepSize = lightMarchingInfo.y / lightMatchingSteps;
-                    float lightMarchingDensityAccum = 0;
                     if (d > 0)
                     {
+                        float2 lightMarchingInfo = rayBoxDst(pos, rcp(lightDirection));
+                        const static int lightMatchingSteps = 5;
+                        float lightMarchingStepSize = lightMarchingInfo.y / lightMatchingSteps;
+                        float lightMarchingDensityAccum = d;
                         [loop]
-                        for(float i = 0; i < lightMatchingSteps;)
+                        for(int i = 1; i < lightMatchingSteps; i++)
                         {
                             float3 npos = pos + lightDirection * (lightMarchingInfo.x + lightMarchingStepSize * i);
                             float sdf, dl;
-                            
-                            if (sampleDensity(npos, sdf, dl))
-                            {
-                                i += max(sdf * _BoundsSize, lightMatchingSteps);
-                            }
-                            else
-                            {
-                                i += stepSize;
-                            }
+
+                            sampleDensity(npos, sdf, dl);
+
+                            // if (sampleDensity(npos, sdf, dl))
+                            // {
+                            //     i += max(sdf * _BoundsSize, lightMatchingSteps);
+                            // }
+                            // else
+                            // {
+                            //     i += stepSize;
+                            // }
                             lightMarchingDensityAccum += dl;
                         }
                         const static float LightAbsortionTowardsSun = 0.2f;
                         float sunLightTr = exp(-lightMarchingDensityAccum * lightMarchingStepSize * LightAbsortionTowardsSun);
-                        const static float darknessThreshold = 0.1f;
+                        const static float darknessThreshold = 0.02f;
                         sunLightTr = darknessThreshold + (1 - darknessThreshold) * sunLightTr;
                         LightEnergy += Tr * d * stepSize * sunLightTr * phaseVal;
                     }
 
-                    const static float LightAbsortionThroughCloud = 0.3f;
+                    const static float LightAbsortionThroughCloud = 0.17f;
                     Tr *= exp(-d * stepSize * LightAbsortionThroughCloud);
                     if (Tr < 0.01) break;
                 }

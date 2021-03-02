@@ -4,3 +4,5 @@ Library
 obj
 Temp
 .vs
+.idea
+*.apk
