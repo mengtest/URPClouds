@@ -67,7 +67,7 @@
 
 
             // 相函数信息
-            const static float4 phaseParams = float4(0.3, 0.3, 0.3, 1);
+            const static float4 phaseParams = float4(0.5, 0.1, 0.1, 0.9);
             float phase(float a) {
                 float blend = .5;
                 float hgBlend = hg(a,phaseParams.x) * (1-blend) + hg(a,-phaseParams.y) * blend;
@@ -82,41 +82,49 @@
             {
                 float3 size = _BoundsMax - _BoundsMin;
                 float2 weatheruv = (pos - _BoundsMin).xz / max(size.x, size.z) * 4;
-                float weather = tex2D(_WeatherMap, weatheruv).x; 
+                const static float2 weatherSpeed = float2(0.1, 0);
+                float weather = tex2D(_WeatherMap, weatheruv + weatherSpeed * _Time.y).x; 
 
-                const float containerEdgeFadeDst = 50;
+                const float containerEdgeFadeDst = 10;
                 float dstFromEdgeX = min(containerEdgeFadeDst, min(pos.x - _BoundsMin.x, _BoundsMax.x - pos.x));
                 float dstFromEdgeZ = min(containerEdgeFadeDst, min(pos.z - _BoundsMin.z, _BoundsMax.z - pos.z));
                 float edgeWeight = min(dstFromEdgeZ,dstFromEdgeX) / containerEdgeFadeDst;
 
-                // float gMin = remap(weather, 0, 1, 0.1, 0.5);
+                float gMin = remap(weather, 0, 1, 0.1, 0.6);
                 // float gMax = remap(weather, 0, 1, gMin, 0.9);
-                // float heightPercent = (pos.y - _BoundsMin.y) / size.y;
-                // float heightGradient = saturate(remap(heightPercent, 0.0, gMin, 0, 1)) * saturate(remap(heightPercent, 1, gMax, 0, 1));
-                // heightGradient *= edgeWeight;
-
-                //  float gMin = remap(weatherMap.x,0,1,0.1,0.5);
-                // float gMax = remap(weatherMap.x,0,1,gMin,0.9);
-                // float heightPercent = (rayPos.y - boundsMin.y) / size.y;
-                // float heightGradient = saturate(remap(heightPercent, 0.0, gMin, 0, 1)) * saturate(remap(heightPercent, 1, gMax, 0, 1));
-                // heightGradient *= edgeWeight;
-
-
-                float gMin = remap(weather, 0, 1, 0.1, 0.5);
                 float heightPercent = (pos.y - _BoundsMin.y) / size.y;
-                float heightGradient = saturate(remap(heightPercent, 0.0, weather, 1, 0)) * saturate(remap(heightPercent, 0.0, gMin, 0, 1));
-                heightGradient *= edgeWeight;
+                if (heightPercent > 0.4) heightPercent = remap(heightPercent, 0.4, 1.0, 0, 1);
+                else heightPercent = remap(heightPercent, 0, 0.4, 1, 0);
+                // float heightGradient = saturate(remap(heightPercent, 0.0, gMin, 0, 1)) * saturate(remap(heightPercent, 1, gMax, 0, 1)) * 0.001;
+                // heightGradient = abs(heightGradient);
+                // heightGradient = saturate(heightGradient);
+                float heightGradient2 = saturate(remap(heightPercent, 0, weather, 1, 0)) * saturate(remap(heightPercent, 0, gMin, 0, 1));
+                // float heightGradient2 = saturate(remap(heightPercent, 0, weather, 1, 0));
+                // float heightGradient = remap(heightPercent, 0, )
+                // heightGradient = saturate(lerp(heightGradient, heightGradient2, 0.99999f));
+                
+                float heightGradient = heightGradient2 * edgeWeight;
 
+
+                // float gMin = remap(weather, 0, 1, 0.1, 0.5);
+                // // float gMax = remap(weather, 0, 1, gMin, 0.9);
+                // float heightPercent = (pos.y - _BoundsMin.y) / size.y;
+                // // float heightGradient = saturate(remap(heightPercent, 0, gMin, 1, 0));
+                // float heightGradient = saturate(remap(heightPercent, 0.0, weather, 1, 0)) * saturate(remap(heightPercent, 0.0, gMin, 0, 1));
+                // // float heightGradient2 = saturate(remap(heightPercent, 0.0, weather, 1, 0))
+                // heightGradient *= edgeWeight;
+
+                const static float3 speed = float3(0.2f, 0.1f, 0.05f);
                 float3 uvw = (pos - _BoundsMin) * 0.001;
-                float3 shapeNoise = tex3D(_ShapeNoise, uvw);
-                const static float3 shapeWeights = float3(0.2, 0.2, 0.2);
+                float3 shapeNoise = tex3D(_ShapeNoise, uvw + speed * _Time.y).xyz;
+                const static float3 shapeWeights = float3(0.2, 0.5, 0.2);
                 float shapeFBM = dot(shapeNoise, shapeWeights);
                 float value = shapeFBM * heightGradient;
 
                 if (value > 0)
                 {
-                    float3 detailNoise = tex3D(_DetailNoise, uvw * 0.5f);   
-                    const static float3 detailWeights = float3(0.2, 0.3, 0.3);
+                    float3 detailNoise = tex3D(_DetailNoise, uvw * 0.5f).xyz;   
+                    const static float3 detailWeights = float3(0.5, 0.3, 0.3);
                     float detailFBM = dot(detailNoise, detailWeights);
 
                     float oneMinuseShapeFBM = 1 - shapeFBM;
@@ -158,7 +166,7 @@
                 return float2 (x/scale, y/scale);
             }
 
-            half4 frag(Varyings input) : SV_Target
+            float4 frag(Varyings input) : SV_Target
             {
                 float beginz = UNITY_NEAR_CLIP_VALUE;
                 float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, input.uv);
@@ -181,7 +189,7 @@
 
 
                 // RayMarching步长
-                const static float stepSize = 0.5f;
+                const static float stepSize = 1.0f;
                 float3 VolumeSize = _BoundsMax - _BoundsMin;
                 float3 InvSize = rcp(VolumeSize);
                 float tmax = rayInfo.x + rayInfo.y;
@@ -196,40 +204,42 @@
 
                 float randomOffset = tex2D(_BlueNoise, squareUV(input.uv * 3)).r;
                 [loop]
-                for(float t = rayInfo.x + randomOffset * 0.5; t < tmax; t += stepSize)
+                for(float t = rayInfo.x + randomOffset; t < tmax; t += stepSize)
                 {
                     float3 pos = cameraPos  + t * direction;
                     float3 uvw = (pos - _BoundsMin) * InvSize;
 
                     float d = sampleDensity(pos);
-                    sum += d * 0.001f;
+                    sum += d * 0.02f;
 
                     float2 lightMarchingInfo = rayBoxDst(pos, rcp(lightDirection));
-                    const static int lightMatchingSteps = 4;
+                    const static int lightMatchingSteps = 5;
                     float lightMarchingStepSize = lightMarchingInfo.y / lightMatchingSteps;
                     float lightMarchingDensityAccum = 0;
                     if (d > 0)
                     {
                         [loop]
-                        for(int i = 0; i < lightMatchingSteps; i++)
+                        for(int i = 0; i < lightMatchingSteps; i ++)
                         {
                             float3 npos = pos + lightDirection * (lightMarchingInfo.x + lightMarchingStepSize * i);
-                            lightMarchingDensityAccum += max(sampleDensity(npos) * lightMarchingStepSize, 0);
+                            lightMarchingDensityAccum += max(sampleDensity(npos), 0);
                         }
-                        const static float LightAbsortionTowardsSun = 1.0f;
+                        const static float LightAbsortionTowardsSun = 0.4f;
                         float sunLightTr = exp(-lightMarchingDensityAccum * lightMarchingStepSize * LightAbsortionTowardsSun);
-                        const static float darknessThreshold = 0.25f;
+                        const static float darknessThreshold = 0.05f;
                         sunLightTr = darknessThreshold + (1 - darknessThreshold) * sunLightTr;
                         LightEnergy += Tr * d * stepSize * sunLightTr * phaseVal;
                     }
 
-                    const static float LightAbsortionThroughCloud = 0.6f;
+                    const static float LightAbsortionThroughCloud = 0.2f;
                     Tr *= exp(-d * stepSize * LightAbsortionThroughCloud);
                     if (Tr < 0.01) break;
                 }
 
-                return float4(sum, sum, sum , 1);
-                return float4(Tr * col.xyz + LightEnergy * _MainLightColor, 1);
+                // return float4(sum, sum, sum , 1);
+                //  return float4(phaseVal * 3, 0, 0 , 1);
+                return float4(Tr * col.xyz + LightEnergy * _MainLightColor.xyz, 1);
+                // return float4(randomOffset, randomOffset, randomOffset, 1);
                 // return float4(Tr * col.xyz, 1);
             }
             

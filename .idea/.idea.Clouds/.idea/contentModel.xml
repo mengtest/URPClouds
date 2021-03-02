@@ -9,12 +9,16 @@
       <e p="Assets" t="Include">
         <e p="Scripts" t="Include">
           <e p="AutoLoadPipelineAsset.cs" t="Include" />
-          <e p="Blit.cs" t="Include" />
-          <e p="BlitPass.cs" t="Include" />
+          <e p="CloudRenderFeature.cs" t="Include" />
+          <e p="CloudRenderPass.cs" t="Include" />
+          <e p="FPS.cs" t="Include" />
           <e p="SimpleCameraController.cs" t="Include" />
+          <e p="VolumeTextureGenerator.cs" t="Include" />
         </e>
         <e p="Shaders" t="Include">
           <e p="RayMarchingClouds.shader" t="Include" />
+          <e p="RayMarchingModelClouds.shader" t="Include" />
+          <e p="SliceShader.shader" t="Include" />
         </e>
         <e p="TutorialInfo" t="Include">
           <e p="Scripts" t="Include">
