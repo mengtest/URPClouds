@@ -44,7 +44,6 @@
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
      <None Include="Assets\Shaders\SDF.compute" />
      <None Include="Assets\Shaders\RayMarchingModelClouds.shader" />
-     <None Include="Assets\Shaders\SliceShader.shader" />
     <Reference Include="UnityEngine">
         <HintPath>C:/Program Files/Unity/Hub/Editor/2019.4.19f1c1/Editor/Data/Managed/UnityEngine/UnityEngine.dll</HintPath>
     </Reference>
