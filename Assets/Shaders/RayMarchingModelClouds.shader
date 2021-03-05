@@ -3,9 +3,9 @@
     Properties
     {
         [HideInInspector] _MainTex("Base (RGB)", 2D) = "white" {}
-        _BlueNoise("BlueNoise", 2D) = "white" {}
-        _ShapeNoise("ShapeNoise", 3D) = "white" {}
-        _DetailNoise("DetailNoise", 3D) = "white" {}
+        [NoScaleOffset]_BlueNoise("BlueNoise", 2D) = "white" {}
+        [NoScaleOffset]_ShapeNoise("ShapeNoise", 3D) = "white" {}
+        [NoScaleOffset]_DetailNoise("DetailNoise", 3D) = "white" {}
         _BoundsMin("BoundsMin", Vector) = (-10, 0, -10, 0)
         _BoundsSize("BoundsSize", float) = 100
     }

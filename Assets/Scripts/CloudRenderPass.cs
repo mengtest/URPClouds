@@ -12,14 +12,8 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
     /// </summary>
     internal class CloudRenderPass : ScriptableRenderPass
     {
-        public enum RenderTarget
-        {
-            Color,
-            RenderTexture,
-        }
 
         public Material blitMaterial = null;
-        public int blitShaderPassIndex = 0;
         public FilterMode filterMode { get; set; }
 
         private RenderTargetIdentifier source { get; set; }
@@ -31,11 +25,10 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
         /// <summary>
         /// Create the CopyColorPass
         /// </summary>
-        public CloudRenderPass(RenderPassEvent renderPassEvent, Material blitMaterial, int blitShaderPassIndex, string tag)
+        public CloudRenderPass(RenderPassEvent renderPassEvent, Material blitMaterial, string tag)
         {
             this.renderPassEvent = renderPassEvent;
             this.blitMaterial = blitMaterial;
-            this.blitShaderPassIndex = blitShaderPassIndex;
             m_ProfilerTag = tag;
             m_TemporaryColorTexture.Init("_TemporaryColorTexture");
         }
@@ -64,19 +57,12 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
             // blitMaterial.SetColor("_SunLightColor", mainLight.finalColor);
             blitMaterial.SetMatrix("_ClipToWorldMatrix", (camera.projectionMatrix * camera.worldToCameraMatrix).inverse);
             // Can't read and write to same color target, create a temp render target to blit. 
-            if (destination == RenderTargetHandle.CameraTarget)
-            {
-                //Downsample
-                opaqueDesc.width /= 2;
-                opaqueDesc.height /= 2;
-                cmd.GetTemporaryRT(m_TemporaryColorTexture.id, opaqueDesc, filterMode);
-                Blit(cmd, source, m_TemporaryColorTexture.Identifier(), blitMaterial, blitShaderPassIndex);
-                Blit(cmd, m_TemporaryColorTexture.Identifier(), source);
-            }
-            else
-            {
-                Blit(cmd, source, destination.Identifier(), blitMaterial, blitShaderPassIndex);
-            }
+            //Downsample
+            opaqueDesc.width /= 2;
+            opaqueDesc.height /= 2;
+            cmd.GetTemporaryRT(m_TemporaryColorTexture.id, opaqueDesc, filterMode);
+            Blit(cmd, source, m_TemporaryColorTexture.Identifier(), blitMaterial, 0);
+            Blit(cmd, m_TemporaryColorTexture.Identifier(), source);
 
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
