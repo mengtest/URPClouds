@@ -6,7 +6,7 @@
         [NoScaleOffset]_BlueNoise("BlueNoise", 2D) = "white" {}
         [NoScaleOffset]_ShapeNoise("ShapeNoise", 3D) = "white" {}
         [NoScaleOffset]_DetailNoise("DetailNoise", 3D) = "white" {}
-        _BoundsMin("BoundsMin", Vector) = (-10, 0, -10, 0)
+        _BoundsMin("BoundsMin", Vector) = (0, 0, 0, 0)
         _BoundsSize("BoundsSize", float) = 100
     }
     SubShader
