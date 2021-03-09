@@ -6,8 +6,17 @@
         [NoScaleOffset]_BlueNoise("BlueNoise", 2D) = "white" {}
         [NoScaleOffset]_ShapeNoise("ShapeNoise", 3D) = "white" {}
         [NoScaleOffset]_DetailNoise("DetailNoise", 3D) = "white" {}
+        _FluidSpeed("FluidSpeed", Vector) = (0.05, 0.02, 0.02)
         _BoundsMin("BoundsMin", Vector) = (0, 0, 0, 0)
         _BoundsSize("BoundsSize", float) = 100
+        _StepSize("StepSize", Range(0.3, 5)) = 0.5
+        _LightAbsorptionTowardSun("LightAbsorationTowardSun", Range(0, 3)) = 0.2
+        _LightAbsorptionThroughCloud("LightAbsorationThroughCloud", Range(0, 3)) = 0.2
+        _DarknessThreshold("DarknessThreshold", Range(0, 0.2)) = 0.02
+        _PhaseParams("PhaseParams", Vector) = (0.5, 0.1, 0.9, 0.1)
+        _SunRayMarchingTimes("SunRayMarchingTimes", Range(2, 10)) = 5
+        _SDFDelta("SDFDelta", Range(-0.05, 0.05)) = 0
+        _SDFFadeBorder("SDFFadeBorder", Range(0, 0.01)) = 0.003
     }
     SubShader
     {
@@ -30,9 +39,18 @@
             sampler3D _DetailNoise;
             float4x4 _ClipToWorldMatrix;
             float3 _BoundsMin;
+            float3 _FluidSpeed;
             float _BoundsSize;
+            float _StepSize;
             float3 _SunLightDirection;
             float3 _SunLightColor;
+            float _LightAbsorptionThroughCloud;
+            float _LightAbsorptionTowardSun;
+            float _DarknessThreshold;
+            float4 _PhaseParams;
+            float _SunRayMarchingTimes;
+            float _SDFDelta;
+            float _SDFFadeBorder;
 
             struct Attributes
             {
@@ -65,11 +83,11 @@
 
 
             // 相函数信息
-            const static float4 phaseParams = float4(0.5, 0.1, 0.1, 0.9);
+            const static float4 phaseParams = _PhaseParams;
             float phase(float a) {
                 float blend = .5;
                 float hgBlend = hg(a,phaseParams.x) * (1-blend) + hg(a,-phaseParams.y) * blend;
-                return phaseParams.z + hgBlend*phaseParams.w;
+                return phaseParams.w + hgBlend*phaseParams.z;
             }
 
             float smoothStep(float v)
@@ -89,20 +107,18 @@
                 float3 uvw = (pos - _BoundsMin) / size;
 
                 // float value = shapeFBM;
-                sdf = tex3D(_ShapeNoise, uvw).a;
-                if (sdf < -0.002f) density = 1;
-                else density  = smoothStep(saturate(remap(sdf, 0, 0.003f, 1.0, 0.0)));
+                sdf = tex3D(_ShapeNoise, uvw).a + _SDFDelta;
+                if (sdf < 0) density = 1;
+                else density  = smoothStep(saturate(remap(sdf, 0, _SDFFadeBorder, 1.0, 0.0)));
 
                 if (density > 0)
                 {
-                    const static float3 speed = float3(0.01f, 0.02f, 0.05f);
+                    const static float3 speed = _FluidSpeed;
                     float3 detailNoise = tex3D(_DetailNoise, uvw * 0.5f + speed * _Time.y).xyz;   
                     const static float3 detailWeights = float3(0.5, 0.3, 0.3);
                     float detailFBM = dot(detailNoise, detailWeights);
-                    detailFBM = remap(detailFBM, 0, 1, 0.5, 1);
-                    // density *= detailFBM;
-                    // density *= detailFBM;
-                    density *= remap(detailNoise.z, 0, 1, 0.4, 1);
+                    const static float detailWeight = 0.0f;
+                    density = lerp(density * detailFBM, density , detailWeight);
                 }
                 return sdf < 0;
             }
@@ -140,7 +156,6 @@
 
             float4 frag(Varyings input) : SV_Target
             {
-                float beginz = UNITY_NEAR_CLIP_VALUE;
                 float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, input.uv);
                 float linearDepth = LinearEyeDepth(depth, _ZBufferParams);
                 #if defined UNITY_REVERSED_Z
@@ -161,7 +176,7 @@
 
 
                 // RayMarching步长
-                const static float stepSize = 0.5f;
+                const static float stepSize = _StepSize;
                 float3 VolumeSize = float3(_BoundsSize, _BoundsSize, _BoundsSize);
                 float3 InvSize = rcp(VolumeSize);
                 float tmax = rayInfo.x + rayInfo.y;
@@ -202,7 +217,7 @@
                     if (d > 0)
                     {
                         float2 lightMarchingInfo = rayBoxDst(pos, rcp(lightDirection));
-                        const static int lightMatchingSteps = 5;
+                        const static int lightMatchingSteps = _SunRayMarchingTimes;
                         float lightMarchingStepSize = lightMarchingInfo.y / lightMatchingSteps;
                         float lightMarchingDensityAccum = d;
                         [loop]
@@ -213,25 +228,14 @@
 
                             sampleDensity(npos, sdf, dl);
 
-                            // if (sampleDensity(npos, sdf, dl))
-                            // {
-                            //     i += max(sdf * _BoundsSize, lightMatchingSteps);
-                            // }
-                            // else
-                            // {
-                            //     i += stepSize;
-                            // }
                             lightMarchingDensityAccum += dl;
                         }
-                        const static float LightAbsortionTowardsSun = 0.2f;
-                        float sunLightTr = exp(-lightMarchingDensityAccum * lightMarchingStepSize * LightAbsortionTowardsSun);
-                        const static float darknessThreshold = 0.02f;
-                        sunLightTr = darknessThreshold + (1 - darknessThreshold) * sunLightTr;
+                        float sunLightTr = exp(-lightMarchingDensityAccum * lightMarchingStepSize * _LightAbsorptionTowardSun);
+                        sunLightTr = _DarknessThreshold + (1 - _DarknessThreshold) * sunLightTr;
                         LightEnergy += Tr * d * stepSize * sunLightTr * phaseVal;
                     }
 
-                    const static float LightAbsortionThroughCloud = 0.17f;
-                    Tr *= exp(-d * stepSize * LightAbsortionThroughCloud);
+                    Tr *= exp(-d * stepSize * _LightAbsorptionThroughCloud);
                     if (Tr < 0.01) break;
                 }
 

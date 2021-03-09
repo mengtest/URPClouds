@@ -7,7 +7,6 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
         [System.Serializable]
         public class BlitSettings
         {
-            public RenderPassEvent Event = RenderPassEvent.AfterRenderingOpaques;
 
             public Material blitMaterial = null;
         }
@@ -19,7 +18,7 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
 
         public override void Create()
         {
-            _cloudRenderPass = new CloudRenderPass(settings.Event, settings.blitMaterial, name);
+            _cloudRenderPass = new CloudRenderPass(settings.blitMaterial, name);
             m_RenderTextureHandle.Init("temp");
         }
 

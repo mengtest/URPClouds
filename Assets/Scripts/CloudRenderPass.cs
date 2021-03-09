@@ -25,10 +25,10 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
         /// <summary>
         /// Create the CopyColorPass
         /// </summary>
-        public CloudRenderPass(RenderPassEvent renderPassEvent, Material blitMaterial, string tag)
+        public CloudRenderPass(Material blitMaterial, string tag)
         {
-            this.renderPassEvent = renderPassEvent;
             this.blitMaterial = blitMaterial;
+            this.renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
             m_ProfilerTag = tag;
             m_TemporaryColorTexture.Init("_TemporaryColorTexture");
         }
