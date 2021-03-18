@@ -239,6 +239,7 @@
                     if (Tr < 0.01) break;
                 }
 
+                // return float4(WSP.xyz, 1);
                 // return float4(sum, sum, sum , 1);
                 //  return float4(phaseVal * 3, 0, 0 , 1);
                 // return float4(Tr * col.xyz, 1);

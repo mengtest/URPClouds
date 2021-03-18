@@ -7,19 +7,16 @@ namespace UnityEngine.Experiemntal.Rendering.Universal
         [System.Serializable]
         public class BlitSettings
         {
-
             public Material blitMaterial = null;
         }
 
         public BlitSettings settings = new BlitSettings();
-        RenderTargetHandle m_RenderTextureHandle;
 
         CloudRenderPass _cloudRenderPass;
 
         public override void Create()
         {
             _cloudRenderPass = new CloudRenderPass(settings.blitMaterial, name);
-            m_RenderTextureHandle.Init("temp");
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
